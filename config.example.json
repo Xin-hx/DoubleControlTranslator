@@ -1,0 +1,8 @@
+{
+  "double_ctrl_ms": 350,
+  "max_chars": 2000,
+  "connect_timeout_s": 3.0,
+  "read_timeout_s": 20.0,
+  "total_timeout_s": 90.0,
+  "model": "Qwen3.5-4B-Q4_K_M.gguf"
+}
