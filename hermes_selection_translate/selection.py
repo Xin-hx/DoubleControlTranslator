@@ -10,6 +10,8 @@ import time
 import win32clipboard
 import win32con
 
+from .clipboard_metafile import ClipboardMetafile
+
 
 class SelectionError(RuntimeError):
     pass
@@ -78,12 +80,21 @@ def verify_foreground(expected: WindowIdentity) -> None:
         raise SelectionError("前台窗口已变化，已取消")
 
 
+def _clipboard_format_name(fmt: int) -> str:
+    if fmt >= 0xC000:
+        try:
+            return win32clipboard.GetClipboardFormatName(fmt)
+        except Exception:
+            pass
+    return str(fmt)
+
+
 class ClipboardSnapshot:
     """A copy of every clipboard format pywin32 can safely materialize.
 
-    CF_BITMAP is preserved through the equivalent system-synthesized DIB. All
-    other integer values remain opaque handles and fail closed rather than
-    risking invalid ownership or clipboard corruption.
+    CF_BITMAP is preserved through the equivalent system-synthesized DIB.
+    OLE transport metadata is not transferable clipboard content. Other
+    unreadable formats still fail closed to avoid losing user data.
     """
 
     def __init__(self, items: list[tuple[int, object]], sequence: int):
@@ -96,6 +107,8 @@ class ClipboardSnapshot:
             items: list[tuple[int, object]] = []
             bitmap_seen = False
             dib_seen = False
+            unreadable_aliases: list[tuple[str, str]] = []
+            saved_names: set[str] = set()
             _open_clipboard()
             try:
                 fmt = 0
@@ -106,21 +119,36 @@ class ClipboardSnapshot:
                     if fmt == win32con.CF_BITMAP:
                         bitmap_seen = True
                         continue
+                    name = _clipboard_format_name(fmt)
+                    # These refer to the original OLE owner, not the saved data.
+                    if name.casefold() in ("dataobject", "ole private data"):
+                        continue
                     try:
-                        value = win32clipboard.GetClipboardData(fmt)
+                        value = (ClipboardMetafile.capture(fmt)
+                                 if fmt in (win32con.CF_METAFILEPICT, win32con.CF_ENHMETAFILE)
+                                 else win32clipboard.GetClipboardData(fmt))
                     except Exception as exc:
-                        raise SelectionError("剪贴板含无法安全保存的格式，已取消") from exc
-                    if isinstance(value, int) or not isinstance(value, (str, bytes, bytearray, tuple, list)):
+                        # WPS advertises empty OLE1 aliases alongside OLE2 data.
+                        alternate = {"native": "embed source", "objectlink": "link source"}.get(name.casefold())
+                        if alternate and getattr(exc, "winerror", None) == 0:
+                            unreadable_aliases.append((name, alternate))
+                            continue
+                        raise SelectionError(f"剪贴板格式 {name}（{fmt}）无法安全保存，已取消") from exc
+                    if isinstance(value, int) or not isinstance(value, (str, bytes, bytearray, tuple, list, ClipboardMetafile)):
                         raise SelectionError("剪贴板含 GDI 或无法安全恢复的格式，已取消")
                     if isinstance(value, bytearray):
                         value = bytes(value)
                     elif isinstance(value, list):
                         value = tuple(value)
                     items.append((int(fmt), value))
+                    saved_names.add(name.casefold())
                     if fmt in (win32con.CF_DIB, win32con.CF_DIBV5):
                         dib_seen = True
                 if bitmap_seen and not dib_seen:
                     raise SelectionError("剪贴板含无法安全恢复的 GDI 位图，已取消")
+                for name, alternate in unreadable_aliases:
+                    if alternate not in saved_names:
+                        raise SelectionError(f"剪贴板格式 {name} 缺少可保存的替代数据，已取消")
                 sequence = int(win32clipboard.GetClipboardSequenceNumber())
             finally:
                 win32clipboard.CloseClipboard()
@@ -137,15 +165,25 @@ class ClipboardSnapshot:
         if int(win32clipboard.GetClipboardSequenceNumber()) != copied_sequence:
             return False
         _open_clipboard()
+        metafiles: dict[int, tuple[ClipboardMetafile, int]] = {}
         try:
             # Recheck while owning the clipboard so an external update cannot
             # slip between the identity check and EmptyClipboard.
             if int(win32clipboard.GetClipboardSequenceNumber()) != copied_sequence:
                 return False
+            # Allocate all GDI objects before replacing any clipboard content.
+            for fmt, value in self.items:
+                if isinstance(value, ClipboardMetafile):
+                    metafiles[fmt] = (value, value.create_handle())
             win32clipboard.EmptyClipboard()
             for fmt, value in self.items:
-                win32clipboard.SetClipboardData(fmt, value)
+                win32clipboard.SetClipboardData(fmt, metafiles[fmt][1] if fmt in metafiles else value)
+                metafiles.pop(fmt, None)  # Successful SetClipboardData transfers ownership.
+        except Exception as exc:
+            raise SelectionError("恢复原剪贴板失败，已取消翻译") from exc
         finally:
+            for value, handle in metafiles.values():
+                value.free_handle(handle)
             win32clipboard.CloseClipboard()
         return True
 
@@ -224,6 +262,23 @@ def _property_int(element: ctypes.c_void_p, property_id: int) -> int | None:
         return int(value.lVal) if value.vt == 3 else None  # VT_I4
     finally:
         ctypes.windll.oleaut32.VariantClear(ctypes.byref(value))
+
+
+def _verify_uia_window(element: ctypes.c_void_p, expected: WindowIdentity) -> None:
+    pid = _property_int(element, 30002)  # UIA_ProcessIdPropertyId
+    native_hwnd = _property_int(element, 30020)  # UIA_NativeWindowHandlePropertyId
+    if native_hwnd:
+        user32 = ctypes.windll.user32
+        user32.GetAncestor.argtypes = (wintypes.HWND, wintypes.UINT)
+        user32.GetAncestor.restype = wintypes.HWND
+        root = int(user32.GetAncestor(native_hwnd, 2) or 0)  # GA_ROOT
+        if root != expected.hwnd or window_identity(root) != expected:
+            raise SelectionError("UI Automation 控件窗口身份已变化")
+        # WPS embeds document windows owned by a different process.
+        if window_identity(native_hwnd).pid != pid:
+            raise SelectionError("UI Automation 控件进程身份已变化")
+    elif pid != expected.pid:
+        raise SelectionError("UI Automation 焦点控件不属于触发窗口")
 
 
 def _classic_edit_selection(element: ctypes.c_void_p) -> str | None:
@@ -309,15 +364,7 @@ def _uia_selection_sync(expected: WindowIdentity | None = None) -> tuple[str | N
             automation, ctypes.byref(element))
         _check(hr, "读取焦点控件失败")
         if expected is not None:
-            if _property_int(element, 30002) != expected.pid:  # UIA_ProcessIdPropertyId
-                raise SelectionError("UI Automation 焦点控件不属于触发窗口")
-            native_hwnd = _property_int(element, 30020)
-            if native_hwnd:
-                user32 = ctypes.windll.user32
-                user32.GetAncestor.argtypes = (wintypes.HWND, wintypes.UINT)
-                user32.GetAncestor.restype = wintypes.HWND
-                if int(user32.GetAncestor(native_hwnd, 2) or 0) != expected.hwnd:  # GA_ROOT
-                    raise SelectionError("UI Automation 控件窗口身份已变化")
+            _verify_uia_window(element, expected)
 
         value = VARIANT()
         hr = _method(element, 10, HRESULT, ctypes.c_int, ctypes.POINTER(VARIANT))(
@@ -475,20 +522,57 @@ def _clipboard_window_matches(expected: WindowIdentity, owner: int) -> bool:
         owner_identity = window_identity(owner)
     except SelectionError:
         return False
-    if (owner_identity.pid, owner_identity.created_100ns) != (expected.pid, expected.created_100ns):
-        return False
     user32.GetAncestor.argtypes = (wintypes.HWND, wintypes.UINT)
     user32.GetAncestor.restype = wintypes.HWND
     root = int(user32.GetAncestor(owner, 2) or owner)
     if root == expected.hwnd:
-        return True
+        try:
+            return window_identity(root) == expected
+        except SelectionError:
+            return False
     # OLE and browser engines may put the clipboard on a same-process hidden
     # top-level broker instead of the visible document HWND.  Limit this
     # exception to that exact process lifetime and to a genuinely hidden root;
     # a second visible document window in the process remains untrusted.
     user32.IsWindowVisible.argtypes = (wintypes.HWND,)
     user32.IsWindowVisible.restype = wintypes.BOOL
-    return root == owner and not bool(user32.IsWindowVisible(owner))
+    if root != owner or user32.IsWindowVisible(owner):
+        return False
+    if (owner_identity.pid, owner_identity.created_100ns) == (expected.pid, expected.created_100ns):
+        return True
+    # WPS's hidden clipboard broker belongs to its embedded document process.
+    try:
+        focused = _native_focused_window(expected)
+        return (owner_identity.pid, owner_identity.created_100ns) == (focused.pid, focused.created_100ns)
+    except SelectionError:
+        return False
+
+
+class GUITHREADINFO(ctypes.Structure):
+    _fields_ = [("cbSize", wintypes.DWORD), ("flags", wintypes.DWORD),
+                ("hwndActive", wintypes.HWND), ("hwndFocus", wintypes.HWND),
+                ("hwndCapture", wintypes.HWND), ("hwndMenuOwner", wintypes.HWND),
+                ("hwndMoveSize", wintypes.HWND), ("hwndCaret", wintypes.HWND),
+                ("rcCaret", wintypes.RECT)]
+
+
+def _native_focused_window(expected: WindowIdentity) -> WindowIdentity:
+    user32 = ctypes.windll.user32
+    user32.GetWindowThreadProcessId.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.DWORD))
+    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+    user32.GetGUIThreadInfo.argtypes = (wintypes.DWORD, ctypes.POINTER(GUITHREADINFO))
+    user32.GetGUIThreadInfo.restype = wintypes.BOOL
+    user32.GetAncestor.argtypes = (wintypes.HWND, wintypes.UINT)
+    user32.GetAncestor.restype = wintypes.HWND
+    info = GUITHREADINFO()
+    info.cbSize = ctypes.sizeof(info)
+    thread = user32.GetWindowThreadProcessId(expected.hwnd, None)
+    if not thread or not user32.GetGUIThreadInfo(thread, ctypes.byref(info)) or not info.hwndFocus:
+        raise SelectionError("无法确认文档焦点窗口")
+    root = int(user32.GetAncestor(info.hwndFocus, 2) or 0)
+    if root != expected.hwnd or window_identity(root) != expected:
+        raise SelectionError("文档焦点窗口身份已变化")
+    return window_identity(int(info.hwndFocus))
 
 
 def _clipboard_owner_matches(expected: WindowIdentity) -> bool:

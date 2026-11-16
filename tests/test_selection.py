@@ -4,11 +4,14 @@ import unittest
 from unittest.mock import Mock, patch
 
 import win32con
+import pywintypes
 
 from hermes_selection_translate.selection import (ClipboardSnapshot, INPUT, SelectionError, VARIANT,
                                                     WindowIdentity, clipboard_fallback,
                                                     get_selected_text, _clipboard_owner_matches,
                                                     _clipboard_window_matches,
+                                                    _verify_uia_window,
+                                                    _native_focused_window,
                                                     _uia_pending)
 
 
@@ -18,6 +21,47 @@ class SelectionTests(unittest.TestCase):
     def test_win64_input_layout_is_complete(self):
         self.assertEqual(ctypes.sizeof(INPUT), 40 if ctypes.sizeof(ctypes.c_void_p) == 8 else 28)
         self.assertEqual(ctypes.sizeof(VARIANT), 24 if ctypes.sizeof(ctypes.c_void_p) == 8 else 16)
+
+    def test_uia_accepts_cross_process_child_only_in_original_window(self):
+        user32 = Mock()
+        child = WindowIdentity(20, 99, 4)
+        with patch("hermes_selection_translate.selection.ctypes.windll.user32", user32), \
+             patch("hermes_selection_translate.selection._property_int", side_effect=[99, 20] * 4), \
+             patch("hermes_selection_translate.selection.window_identity") as identity:
+            user32.GetAncestor.return_value = self.target.hwnd
+            identity.side_effect = [self.target, child]
+            _verify_uia_window(ctypes.c_void_p(1), self.target)
+            user32.GetAncestor.return_value = 30
+            with self.assertRaisesRegex(SelectionError, "窗口身份"):
+                _verify_uia_window(ctypes.c_void_p(1), self.target)
+            user32.GetAncestor.return_value = self.target.hwnd
+            identity.side_effect = [WindowIdentity(1, 2, 999)]
+            with self.assertRaisesRegex(SelectionError, "窗口身份"):
+                _verify_uia_window(ctypes.c_void_p(1), self.target)
+            identity.side_effect = [self.target, WindowIdentity(20, 100, 4)]
+            with self.assertRaisesRegex(SelectionError, "进程身份"):
+                _verify_uia_window(ctypes.c_void_p(1), self.target)
+
+    def test_uia_without_native_handle_still_requires_matching_process(self):
+        with patch("hermes_selection_translate.selection._property_int", side_effect=[99, 0]):
+            with self.assertRaisesRegex(SelectionError, "不属于"):
+                _verify_uia_window(ctypes.c_void_p(1), self.target)
+        with patch("hermes_selection_translate.selection._property_int", side_effect=[2, 0]):
+            _verify_uia_window(ctypes.c_void_p(1), self.target)
+
+    def test_clipboard_accepts_cross_process_child_only_in_original_window(self):
+        user32 = Mock()
+        child = WindowIdentity(20, 99, 4)
+        with patch("hermes_selection_translate.selection.ctypes.windll.user32", user32), \
+             patch("hermes_selection_translate.selection.window_identity") as identity:
+            user32.GetAncestor.return_value = self.target.hwnd
+            identity.side_effect = [child, self.target]
+            self.assertTrue(_clipboard_window_matches(self.target, child.hwnd))
+            identity.side_effect = [child, WindowIdentity(1, 2, 999)]
+            self.assertFalse(_clipboard_window_matches(self.target, child.hwnd))
+            user32.GetAncestor.return_value = 30
+            identity.side_effect = [child]
+            self.assertFalse(_clipboard_window_matches(self.target, child.hwnd))
 
     def test_uia_wins_without_clipboard(self):
         with patch("hermes_selection_translate.selection.verify_foreground"), \
@@ -76,6 +120,95 @@ class SelectionTests(unittest.TestCase):
              patch("hermes_selection_translate.selection.win32clipboard.OpenClipboard") as opened:
             self.assertFalse(snapshot.restore_if_unchanged(11))
             opened.assert_not_called()
+
+    def test_ole_transport_metadata_is_not_read_or_restored(self):
+        formats = iter([0xC001, 13, 0xC002, 0xC003, 0])
+        names = {0xC001: "DataObject", 0xC002: "Ole Private Data", 0xC003: "Rich Text Format"}
+        values = {13: "public text", 0xC003: b"{\\rtf1 public text}"}
+        with patch("hermes_selection_translate.selection._open_clipboard"), \
+             patch("hermes_selection_translate.selection.win32clipboard.CloseClipboard"), \
+             patch("hermes_selection_translate.selection.win32clipboard.EnumClipboardFormats",
+                   side_effect=lambda _: next(formats)), \
+             patch("hermes_selection_translate.selection.win32clipboard.GetClipboardFormatName",
+                   side_effect=lambda fmt: names[fmt]), \
+             patch("hermes_selection_translate.selection.win32clipboard.GetClipboardData",
+                   side_effect=lambda fmt: values[fmt]) as read, \
+             patch("hermes_selection_translate.selection.win32clipboard.GetClipboardSequenceNumber",
+                   return_value=10), \
+             patch("hermes_selection_translate.selection.win32clipboard.EmptyClipboard"), \
+             patch("hermes_selection_translate.selection.win32clipboard.SetClipboardData") as write:
+            snapshot = ClipboardSnapshot.capture()
+            self.assertTrue(snapshot.restore_if_unchanged(10))
+        self.assertEqual([call.args for call in read.call_args_list], [(13,), (0xC003,)])
+        self.assertEqual([call.args for call in write.call_args_list], list(values.items()))
+
+    def test_unreadable_user_format_is_named_and_clipboard_is_untouched(self):
+        formats = iter([0xC003, 0])
+        with patch("hermes_selection_translate.selection._open_clipboard"), \
+             patch("hermes_selection_translate.selection.win32clipboard.CloseClipboard"), \
+             patch("hermes_selection_translate.selection.win32clipboard.EnumClipboardFormats",
+                   side_effect=lambda _: next(formats)), \
+             patch("hermes_selection_translate.selection.win32clipboard.GetClipboardFormatName",
+                   return_value="WPS custom document"), \
+             patch("hermes_selection_translate.selection.win32clipboard.GetClipboardData",
+                   side_effect=RuntimeError("unreadable")), \
+             patch("hermes_selection_translate.selection.win32clipboard.EmptyClipboard") as clear:
+            with self.assertRaisesRegex(SelectionError, "WPS custom document"):
+                ClipboardSnapshot.capture()
+        clear.assert_not_called()
+
+    def test_empty_ole1_alias_requires_saved_ole2_representation(self):
+        for aliases, alternate in ((["Native", "ObjectLink"], True), (["Native"], False)):
+            with self.subTest(alternate=alternate):
+                names = {0xC001: "Native", 0xC002: "ObjectLink",
+                         0xC003: "Embed Source", 0xC004: "Link Source"}
+                formats = iter(([0xC001, 0xC002, 0xC003, 0xC004] if alternate else [0xC001]) + [0])
+                def read(fmt):
+                    if names[fmt] in aliases:
+                        raise pywintypes.error(0, "GetClipboardData", "No error message is available")
+                    return b"public OLE2 data"
+                with patch("hermes_selection_translate.selection._open_clipboard"), \
+                     patch("hermes_selection_translate.selection.win32clipboard.CloseClipboard"), \
+                     patch("hermes_selection_translate.selection.win32clipboard.EnumClipboardFormats",
+                           side_effect=lambda _: next(formats)), \
+                     patch("hermes_selection_translate.selection.win32clipboard.GetClipboardFormatName",
+                           side_effect=lambda fmt: names[fmt]), \
+                     patch("hermes_selection_translate.selection.win32clipboard.GetClipboardData", side_effect=read), \
+                     patch("hermes_selection_translate.selection.win32clipboard.GetClipboardSequenceNumber", return_value=10):
+                    if alternate:
+                        snapshot = ClipboardSnapshot.capture()
+                        self.assertEqual(snapshot.items, [(0xC003, b"public OLE2 data"), (0xC004, b"public OLE2 data")])
+                    else:
+                        with self.assertRaisesRegex(SelectionError, "替代数据"):
+                            ClipboardSnapshot.capture()
+
+    def test_metafile_allocation_failure_does_not_clear_clipboard(self):
+        from hermes_selection_translate.clipboard_metafile import ClipboardMetafile
+        snapshot = ClipboardSnapshot([(win32con.CF_ENHMETAFILE, ClipboardMetafile(b"bad"))], 10)
+        with patch("hermes_selection_translate.selection._open_clipboard"), \
+             patch("hermes_selection_translate.selection.win32clipboard.CloseClipboard"), \
+             patch("hermes_selection_translate.selection.win32clipboard.GetClipboardSequenceNumber", return_value=10), \
+             patch.object(ClipboardMetafile, "create_handle", side_effect=OSError("allocation failed")), \
+             patch("hermes_selection_translate.selection.win32clipboard.EmptyClipboard") as clear:
+            with self.assertRaisesRegex(SelectionError, "恢复原剪贴板失败"):
+                snapshot.restore_if_unchanged(10)
+        clear.assert_not_called()
+
+    def test_failed_metafile_restore_frees_only_untransferred_handles(self):
+        from hermes_selection_translate.clipboard_metafile import ClipboardMetafile
+        snapshot = ClipboardSnapshot([(3, ClipboardMetafile(b"wmf", (8, 1, 1))),
+                                      (14, ClipboardMetafile(b"emf"))], 10)
+        with patch("hermes_selection_translate.selection._open_clipboard"), \
+             patch("hermes_selection_translate.selection.win32clipboard.CloseClipboard"), \
+             patch("hermes_selection_translate.selection.win32clipboard.GetClipboardSequenceNumber", return_value=10), \
+             patch.object(ClipboardMetafile, "create_handle", side_effect=[101, 202]), \
+             patch.object(ClipboardMetafile, "free_handle") as free, \
+             patch("hermes_selection_translate.selection.win32clipboard.EmptyClipboard"), \
+             patch("hermes_selection_translate.selection.win32clipboard.SetClipboardData",
+                   side_effect=[None, OSError("write failed")]):
+            with self.assertRaisesRegex(SelectionError, "恢复原剪贴板失败"):
+                snapshot.restore_if_unchanged(10)
+        free.assert_called_once_with(202)
 
     def test_bitmap_handle_is_represented_by_safe_dib_and_terminal_sequence(self):
         formats = iter([win32con.CF_BITMAP, win32con.CF_DIB, 0,
@@ -142,6 +275,38 @@ class SelectionTests(unittest.TestCase):
              patch("hermes_selection_translate.selection.window_identity",
                    return_value=WindowIdentity(20, 2, 3)):
             self.assertTrue(_clipboard_owner_matches(self.target))
+
+    def test_hidden_broker_must_match_embedded_focused_process_lifetime(self):
+        user32 = Mock()
+        user32.GetAncestor.return_value = 20
+        user32.IsWindowVisible.return_value = False
+        with patch("hermes_selection_translate.selection.ctypes.windll.user32", user32), \
+             patch("hermes_selection_translate.selection.window_identity", return_value=WindowIdentity(20, 99, 4)), \
+             patch("hermes_selection_translate.selection._native_focused_window") as focused:
+            focused.return_value = WindowIdentity(30, 99, 4)
+            self.assertTrue(_clipboard_window_matches(self.target, 20))
+            focused.return_value = WindowIdentity(30, 99, 999)
+            self.assertFalse(_clipboard_window_matches(self.target, 20))
+            focused.return_value = WindowIdentity(30, 100, 4)
+            self.assertFalse(_clipboard_window_matches(self.target, 20))
+            focused.side_effect = SelectionError("focus changed")
+            self.assertFalse(_clipboard_window_matches(self.target, 20))
+
+    def test_native_focus_must_belong_to_original_root_window(self):
+        user32 = Mock()
+        def get_info(thread, info):
+            info._obj.hwndFocus = 30
+            return True
+        user32.GetGUIThreadInfo.side_effect = get_info
+        user32.GetAncestor.return_value = self.target.hwnd
+        child = WindowIdentity(30, 99, 4)
+        with patch("hermes_selection_translate.selection.ctypes.windll.user32", user32), \
+             patch("hermes_selection_translate.selection.window_identity", side_effect=[self.target, child]) as identity:
+            self.assertEqual(_native_focused_window(self.target), child)
+            user32.GetAncestor.return_value = 999
+            with self.assertRaisesRegex(SelectionError, "身份已变化"):
+                _native_focused_window(self.target)
+            identity.assert_called_with(30)
 
     def test_unknown_other_process_reused_pid_and_visible_other_document_are_rejected(self):
         user32 = Mock()

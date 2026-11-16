@@ -18,54 +18,6 @@ from hermes_selection_translate.selection import (ClipboardSnapshot, SelectionEr
     get_selected_text, uia_selected_text, window_identity)
 
 
-class UserClipboardSnapshot:
-    """Test-only preservation, including a duplicated CF_BITMAP handle.
-
-    Production intentionally refuses GDI handles. The harness duplicates the
-    current bitmap solely so it can establish a controlled, safe clipboard and
-    put every original format back after the fallback test.
-    """
-    def __init__(self):
-        self.items = []
-        self.had_bitmap = False
-        deadline = time.monotonic() + 2
-        while True:
-            try:
-                win32clipboard.OpenClipboard(); break
-            except Exception:
-                if time.monotonic() >= deadline: raise
-                time.sleep(.02)
-        try:
-            fmt = 0
-            while True:
-                fmt = win32clipboard.EnumClipboardFormats(fmt)
-                if not fmt: break
-                value = win32clipboard.GetClipboardData(fmt)
-                if isinstance(value, int):
-                    if fmt != win32con.CF_BITMAP:
-                        raise RuntimeError(f"unsupported live clipboard handle format {fmt}")
-                    # Windows synthesizes CF_BITMAP from the captured CF_DIB;
-                    # production still refuses the original GDI handle.
-                    self.had_bitmap = True
-                else:
-                    self.items.append((fmt, "data", value))
-        finally: win32clipboard.CloseClipboard()
-
-    def restore(self):
-        deadline = time.monotonic() + 2
-        while True:
-            try:
-                win32clipboard.OpenClipboard(); break
-            except Exception:
-                if time.monotonic() >= deadline: raise
-                time.sleep(.02)
-        try:
-            win32clipboard.EmptyClipboard()
-            for fmt, kind, value in self.items:
-                win32clipboard.SetClipboardData(fmt, value)
-        finally: win32clipboard.CloseClipboard()
-
-
 def launch(password=False):
     command = [sys.executable, str(ROOT / "tests" / "win32_edit_host.py")]
     if password: command.append("--password")
@@ -104,7 +56,7 @@ def stop(process):
 public = "Sphinx of black quartz, judge my vow."
 normal, info = launch()
 try:
-    original = UserClipboardSnapshot()
+    original = ClipboardSnapshot.capture()
     target = window_identity(info["hwnd"])
     assert ctypes.windll.user32.GetForegroundWindow() == info["hwnd"], {
         "expected": info["hwnd"], "actual": ctypes.windll.user32.GetForegroundWindow()}
@@ -124,8 +76,19 @@ try:
     assert before.items == after.items, (before.items, after.items)
     assert ctypes.windll.user32.GetForegroundWindow() == info["hwnd"]
 finally:
-    if 'original' in globals(): original.restore()
-    stop(normal)
+    try:
+        if 'original' in globals() and 'custom' in globals():
+            win32clipboard.OpenClipboard()
+            try:
+                owned = (win32clipboard.IsClipboardFormatAvailable(custom)
+                         and win32clipboard.GetClipboardData(custom) == b"custom-safe-format\0")
+                sequence = int(win32clipboard.GetClipboardSequenceNumber())
+            finally:
+                win32clipboard.CloseClipboard()
+            if owned:
+                assert original.restore_if_unchanged(sequence)
+    finally:
+        stop(normal)
 
 password, password_info = launch(True)
 try:

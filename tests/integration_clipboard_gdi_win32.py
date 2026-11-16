@@ -6,6 +6,8 @@ restored. No clipboard payload is printed or written to disk.
 from __future__ import annotations
 
 import json
+import ctypes
+from ctypes import wintypes
 from pathlib import Path
 import secrets
 import struct
@@ -19,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from hermes_selection_translate.selection import ClipboardSnapshot
+from hermes_selection_translate.clipboard_metafile import ClipboardMetafile
 
 
 PUBLIC_PIXELS = bytes.fromhex(
@@ -35,6 +38,17 @@ PUBLIC_PNG = bytes.fromhex(
 
 
 def set_public_image(png_format: int, owner_format: int, owner_token: bytes) -> int:
+    gdi = ctypes.windll.gdi32
+    gdi.CreateEnhMetaFileW.argtypes = (wintypes.HDC, wintypes.LPCWSTR, ctypes.POINTER(wintypes.RECT), wintypes.LPCWSTR)
+    gdi.CreateEnhMetaFileW.restype = wintypes.HDC
+    gdi.Rectangle.argtypes = (wintypes.HDC, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int)
+    gdi.CloseEnhMetaFile.argtypes, gdi.CloseEnhMetaFile.restype = (wintypes.HDC,), wintypes.HANDLE
+    gdi.DeleteEnhMetaFile.argtypes = (wintypes.HANDLE,)
+    dc = gdi.CreateEnhMetaFileW(None, None, None, None)
+    assert dc
+    gdi.Rectangle(dc, 0, 0, 20, 20)
+    metafile = gdi.CloseEnhMetaFile(dc)
+    assert metafile
     win32clipboard.OpenClipboard()
     try:
         win32clipboard.EmptyClipboard()
@@ -44,8 +58,12 @@ def set_public_image(png_format: int, owner_format: int, owner_token: bytes) -> 
         win32clipboard.SetClipboardData(win32con.CF_DIB, PUBLIC_DIB)
         win32clipboard.SetClipboardData(win32con.CF_UNICODETEXT, "Hermes public fixture")
         win32clipboard.SetClipboardData(png_format, PUBLIC_PNG)
+        win32clipboard.SetClipboardData(win32con.CF_ENHMETAFILE, int(metafile))
+        metafile = None
     finally:
         win32clipboard.CloseClipboard()
+        if metafile:
+            gdi.DeleteEnhMetaFile(metafile)
     return int(win32clipboard.GetClipboardSequenceNumber())
 
 
@@ -111,6 +129,11 @@ def main() -> None:
         assert restored_png == PUBLIC_PNG
         assert isinstance(restored_bitmap, int) and restored_bitmap
         assert restored_text == "Hermes public fixture"
+        after = ClipboardSnapshot.capture()
+        original_metafiles = [(fmt, value) for fmt, value in snapshot.items if isinstance(value, ClipboardMetafile)]
+        restored_metafiles = [(fmt, value) for fmt, value in after.items if isinstance(value, ClipboardMetafile)]
+        assert original_metafiles == restored_metafiles
+        assert {fmt for fmt, _ in original_metafiles} == {win32con.CF_METAFILEPICT, win32con.CF_ENHMETAFILE}
 
         # A later update cannot be overwritten by a stale transaction.
         stale_sequence = fixture_sequence
@@ -123,6 +146,7 @@ def main() -> None:
             "bitmap_handle_seen": True,
             "dib_pixel_bytes": len(PUBLIC_PIXELS),
             "png_preserved": True,
+            "wmf_emf_preserved": True,
             "stale_restore_refused": True,
             "snapshot_format_ids": [fmt for fmt, _ in snapshot.items],
         }
