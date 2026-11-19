@@ -20,8 +20,8 @@ import win32con
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from hermes_selection_translate.selection import ClipboardSnapshot
-from hermes_selection_translate.clipboard_metafile import ClipboardMetafile
+from double_ctrl_translator.selection import ClipboardSnapshot
+from double_ctrl_translator.clipboard_metafile import ClipboardMetafile
 
 
 PUBLIC_PIXELS = bytes.fromhex(
@@ -92,7 +92,7 @@ def main() -> None:
     restored_user = False
     try:
         png_format = win32clipboard.RegisterClipboardFormat("PNG")
-        owner_format = win32clipboard.RegisterClipboardFormat("HermesTool.GDIFixture.Owner")
+        owner_format = win32clipboard.RegisterClipboardFormat("DoubleCtrlTranslator.GDIFixture.Owner")
         owner_token = secrets.token_bytes(32)
         fixture_started = True
         fixture_sequence = set_public_image(png_format, owner_format, owner_token)

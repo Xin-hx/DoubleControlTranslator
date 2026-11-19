@@ -10,7 +10,7 @@ import sys
 def child_command(mode: str, *args: str) -> list[str]:
     if getattr(sys, "frozen", False):
         return [sys.executable, "--" + mode, *args]
-    return [sys.executable, "-m", "hermes_selection_translate", "--" + mode, *args]
+    return [sys.executable, "-m", "double_ctrl_translator", "--" + mode, *args]
 
 
 def child_environment() -> dict:

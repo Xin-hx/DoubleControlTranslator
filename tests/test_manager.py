@@ -4,7 +4,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from hermes_selection_translate.manager import WorkerManager
+from double_ctrl_translator.manager import WorkerManager
 
 
 class _Process:

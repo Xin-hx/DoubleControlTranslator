@@ -5,13 +5,16 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from hermes_selection_translate.gesture import DoubleCtrlDetector
-from hermes_selection_translate.model import TranslationError, _validate_loopback, stream_translate
+from double_ctrl_translator.gesture import DoubleCtrlDetector
+from double_ctrl_translator.model import (DICTIONARY_PROMPT, TranslationError,
+                                          _validate_loopback, is_dictionary_query, stream_translate)
 
 
 class _FakeOpener:
     def __init__(self, body: bytes): self.body = body
-    def open(self, request, timeout): return io.BytesIO(self.body)
+    def open(self, request, timeout):
+        self.request = request
+        return io.BytesIO(self.body)
 
 
 class GestureTests(unittest.TestCase):
@@ -54,6 +57,20 @@ class GestureTests(unittest.TestCase):
 
 
 class ModelTests(unittest.TestCase):
+    def test_dictionary_query_boundary(self):
+        for value in ("apple", "  take off  ", "mother-in-law", "don't give up"):
+            self.assertTrue(is_dictionary_query(value), value)
+        for value in ("Hello world.", "a b c d e f", "你好", "hello, world", "run\naway"):
+            self.assertFalse(is_dictionary_query(value), value)
+
+    def test_dictionary_prompt_is_sent_only_when_requested(self):
+        body = b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n'
+        opener = _FakeOpener(body)
+        with patch("double_ctrl_translator.model._opener", return_value=opener):
+            stream_translate("apple", {"base_url": "http://127.0.0.1:1/v1"}, "m",
+                             lambda _: None, threading.Event(), dictionary=True)
+        self.assertEqual(json.loads(opener.request.data)["messages"][0]["content"], DICTIONARY_PROMPT)
+
     def test_only_ip_literal_loopback_is_allowed(self):
         for url in ("https://127.0.0.1:1/v1", "http://localhost:1/v1",
                     "http://example.com/v1", "http://127.0.0.1@example.com/v1"):
@@ -67,7 +84,7 @@ class ModelTests(unittest.TestCase):
                 'data: {"choices":[{"delta":{"content":"好"},"finish_reason":"stop"}]}\n\n'
                 'data: [DONE]\n').encode()
         seen = []
-        with patch("hermes_selection_translate.model._opener", return_value=_FakeOpener(body)):
+        with patch("double_ctrl_translator.model._opener", return_value=_FakeOpener(body)):
             result = stream_translate("hello", {"base_url": "http://127.0.0.1:1/v1", "api_key": "secret"},
                                       "m", seen.append, threading.Event())
         self.assertEqual(result, "你好")
@@ -76,21 +93,21 @@ class ModelTests(unittest.TestCase):
     def test_finish_length_is_failure(self):
         body = (b'data: {"choices":[{"delta":{"content":"partial"},"finish_reason":"length"}]}\n\n'
                 b'data: [DONE]\n')
-        with patch("hermes_selection_translate.model._opener", return_value=_FakeOpener(body)):
+        with patch("double_ctrl_translator.model._opener", return_value=_FakeOpener(body)):
             with self.assertRaisesRegex(TranslationError, "不完整"):
                 stream_translate("x", {"base_url": "http://127.0.0.1:1/v1"},
                                  "m", lambda _: None, threading.Event())
 
     def test_missing_done_is_failure(self):
         body = b'data: {"choices":[{"delta":{"content":"partial"}}]}\n'
-        with patch("hermes_selection_translate.model._opener", return_value=_FakeOpener(body)):
+        with patch("double_ctrl_translator.model._opener", return_value=_FakeOpener(body)):
             with self.assertRaisesRegex(TranslationError, "意外中断"):
                 stream_translate("x", {"base_url": "http://127.0.0.1:1/v1"},
                                  "m", lambda _: None, threading.Event())
 
     def test_total_generation_deadline_is_enforced(self):
         body = b'data: {"choices":[{"delta":{"content":"late"}}]}\n'
-        with patch("hermes_selection_translate.model._opener", return_value=_FakeOpener(body)):
+        with patch("double_ctrl_translator.model._opener", return_value=_FakeOpener(body)):
             with self.assertRaisesRegex(TranslationError, "总时限"):
                 stream_translate("x", {"base_url": "http://127.0.0.1:1/v1"},
                                  "m", lambda _: None, threading.Event(), total_timeout=0)

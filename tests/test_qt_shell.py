@@ -7,8 +7,8 @@ import unittest
 from unittest.mock import patch
 
 from PySide6.QtWidgets import QApplication
-from hermes_selection_translate.app import MainWindow
-from hermes_selection_translate.qt_ui import apply_style
+from double_ctrl_translator.app import MainWindow
+from double_ctrl_translator.qt_ui import apply_style
 
 
 class QtShellTests(unittest.TestCase):
@@ -20,7 +20,7 @@ class QtShellTests(unittest.TestCase):
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.env = patch.dict(os.environ, {'HERMESTOOL_HOME': self.temp.name, 'HERMES_HOME': str(Path(self.temp.name) / 'absent')})
+        self.env = patch.dict(os.environ, {'DOUBLECTRLTRANSLATOR_HOME': self.temp.name, 'HERMES_HOME': str(Path(self.temp.name) / 'absent')})
         self.env.start()
 
     def tearDown(self):
@@ -43,7 +43,7 @@ class QtShellTests(unittest.TestCase):
         self.app.processEvents()
 
     def test_close_to_tray_restore_and_render(self):
-        with patch('hermes_selection_translate.app.QSystemTrayIcon.isSystemTrayAvailable', return_value=True):
+        with patch('double_ctrl_translator.app.QSystemTrayIcon.isSystemTrayAvailable', return_value=True):
             window = MainWindow(self.app)
             try:
                 window.show()
@@ -61,7 +61,7 @@ class QtShellTests(unittest.TestCase):
                 self.dispose(window)
 
     def test_no_tray_keeps_window_visible(self):
-        with patch('hermes_selection_translate.app.QSystemTrayIcon.isSystemTrayAvailable', return_value=False):
+        with patch('double_ctrl_translator.app.QSystemTrayIcon.isSystemTrayAvailable', return_value=False):
             window = MainWindow(self.app)
             try:
                 window.show()
@@ -80,11 +80,11 @@ class QtShellTests(unittest.TestCase):
             self.settle(window)
             cancelled = Exception('cancelled')
             cancelled.winerror = 1223
-            with patch('hermes_selection_translate.app.launch_elevated', side_effect=cancelled), patch.object(window, 'quit') as quit_app:
+            with patch('double_ctrl_translator.app.launch_elevated', side_effect=cancelled), patch.object(window, 'quit') as quit_app:
                 window.restart_elevated()
                 quit_app.assert_not_called()
                 self.assertFalse(window.quitting)
-            with patch('hermes_selection_translate.app.launch_elevated'), patch.object(window, 'quit') as quit_app:
+            with patch('double_ctrl_translator.app.launch_elevated'), patch.object(window, 'quit') as quit_app:
                 window.restart_elevated()
                 quit_app.assert_called_once()
         finally:

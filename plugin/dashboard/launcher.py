@@ -90,7 +90,7 @@ def launch_from_hermes():
     try:
         if os.name != "nt" or not _trusted_desktop():
             return
-        directory = Path(os.environ["LOCALAPPDATA"]) / "HermesTool"
+        directory = Path(os.environ["LOCALAPPDATA"]) / "DoubleCtrlTranslator"
         settings_path = directory / "settings.json"
         if settings_path.exists() and not json.loads(settings_path.read_text("utf-8")).get("launch_with_hermes", True):
             return
@@ -99,4 +99,4 @@ def launch_from_hermes():
         if executable.is_file():
             launch_independent(executable)
     except Exception:
-        logging.getLogger(__name__).exception("HermesTool startup bridge failed")
+        logging.getLogger(__name__).exception("DoubleCtrlTranslator startup bridge failed")

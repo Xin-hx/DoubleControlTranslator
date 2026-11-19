@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hermes_selection_translate.model import TranslationError, stream_translate
+from double_ctrl_translator.model import TranslationError, stream_translate
 
 
 hits = {"primary": [], "redirect": [], "proxy": []}

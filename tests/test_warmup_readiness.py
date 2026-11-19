@@ -4,8 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from hermes_selection_translate.manager import WorkerManager
-from hermes_selection_translate.model import TranslationError
+from double_ctrl_translator.manager import WorkerManager
+from double_ctrl_translator.model import TranslationError
 
 
 class WarmupReadinessTests(unittest.TestCase):
@@ -18,7 +18,7 @@ class WarmupReadinessTests(unittest.TestCase):
                 patch.object(manager.model, "start", return_value=endpoint), \
                 patch.object(manager.model, "running", return_value=True), \
                 patch.object(manager, "_send_locked", return_value=True), \
-                patch("hermes_selection_translate.manager.warmup",
+                patch("double_ctrl_translator.manager.warmup",
                       side_effect=TranslationError("预热失败")):
             result = manager.start_model()
         self.assertEqual(result["state"], "error")

@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from hermes_selection_translate.endpoint import resolve_endpoint, resolve_healthy_endpoint, TARGET_SHARED_MODEL
-from hermes_selection_translate.manager import WorkerManager
-from hermes_selection_translate.model import _opener
+from double_ctrl_translator.endpoint import resolve_endpoint, resolve_healthy_endpoint, TARGET_SHARED_MODEL
+from double_ctrl_translator.manager import WorkerManager
+from double_ctrl_translator.model import _opener
 
 
 def main():
@@ -44,11 +44,11 @@ def main():
             while time.monotonic() < deadline and model_status() not in {'loaded', 'running'}:
                 time.sleep(.25)
         shared = resolve_healthy_endpoint()
-        exe = ROOT / 'dist/HermesTool/HermesTool.exe'
+        exe = ROOT / 'dist/DoubleCtrlTranslator/DoubleCtrlTranslator.exe'
         def command(mode, *args):
             assert mode == 'worker', 'shared reuse tried to spawn an owned model'
             return [str(exe), '--worker', *args, '--allow-test-marker']
-        with patch('hermes_selection_translate.manager.child_command', side_effect=command):
+        with patch('double_ctrl_translator.manager.child_command', side_effect=command):
             state = manager.enable_and_load()
             assert state['state'] == 'running' and state['model'] == 'shared', state
             assert not manager.model.running()

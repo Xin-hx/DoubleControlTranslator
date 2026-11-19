@@ -43,7 +43,7 @@ def restart_command():
         return [sys.executable, *args]
     executable = Path(sys.executable)
     windowed = executable.with_name('pythonw.exe')
-    return [str(windowed if windowed.is_file() else executable), '-m', 'hermes_selection_translate', *args]
+    return [str(windowed if windowed.is_file() else executable), '-m', 'double_ctrl_translator', *args]
 
 
 def launch_elevated():

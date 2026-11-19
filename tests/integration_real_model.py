@@ -8,7 +8,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tests"))
-from hermes_selection_translate.model import stream_translate, warmup
+from double_ctrl_translator.model import stream_translate, warmup
 from model_harness import TemporaryLlama
 
 started = time.perf_counter(); chunks = []

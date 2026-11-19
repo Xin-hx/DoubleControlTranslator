@@ -14,7 +14,7 @@ args = parser.parse_args()
 user32 = ctypes.windll.user32
 WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_CHILD = 0x00CF0000, 0x10000000, 0x40000000
 ES_MULTILINE, ES_PASSWORD = 0x0004, 0x0020
-parent = user32.CreateWindowExW(0, "STATIC", "HermesTool isolated selection test",
+parent = user32.CreateWindowExW(0, "STATIC", "DoubleCtrlTranslator isolated selection test",
                                 WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                                 120, 120, 640, 220, None, None, None, None)
 style = WS_CHILD | WS_VISIBLE | (ES_PASSWORD if args.password else ES_MULTILINE)

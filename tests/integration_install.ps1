@@ -8,11 +8,11 @@ try {
   & (Join-Path $projectRoot 'scripts\install.ps1') -HermesHome $sandbox
   $backend = Join-Path $sandbox 'plugins\selection-translate'
   $desktop = Join-Path $sandbox 'desktop-plugins\selection-translate'
-  if (-not (Test-Path -LiteralPath (Join-Path $backend 'hermes_selection_translate\worker.py'))) { throw 'backend package missing' }
+  if (-not (Test-Path -LiteralPath (Join-Path $backend 'double_ctrl_translator\worker.py'))) { throw 'backend package missing' }
   if (-not (Test-Path -LiteralPath (Join-Path $desktop 'plugin.js'))) { throw 'desktop loader missing' }
   $config = Join-Path $backend 'config.json'
   [IO.File]::WriteAllText($config, '{"double_ctrl_ms":420}', (New-Object System.Text.UTF8Encoding($false)))
-  $worker = Join-Path $backend 'hermes_selection_translate\worker.py'
+  $worker = Join-Path $backend 'double_ctrl_translator\worker.py'
   Add-Content -LiteralPath $worker -Value '# sandbox-stale-copy'
   $rollbackExercised = $false
   try { & (Join-Path $projectRoot 'scripts\update.ps1') -HermesHome $sandbox -TestFailAfterBackendSwap } catch { $rollbackExercised = $true }
@@ -38,7 +38,7 @@ try {
   if (-not $mismatchRejected) { throw 'marker mismatch was not rejected' }
   if (-not (Test-Path -LiteralPath $backend) -or -not (Test-Path -LiteralPath $desktop)) { throw 'mismatch removed content' }
   $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-  [IO.File]::WriteAllText((Join-Path $desktop '.hermes-selection-translate-install'), 'HermesTool/selection-translate/v1', $utf8NoBom)
+  [IO.File]::WriteAllText((Join-Path $desktop '.hermes-selection-translate-install'), 'DoubleCtrlTranslator/selection-translate/v1', $utf8NoBom)
   & (Join-Path $projectRoot 'scripts\uninstall.ps1') -HermesHome $sandbox
   if ((Test-Path -LiteralPath $backend) -or (Test-Path -LiteralPath $desktop)) { throw 'uninstall left targets' }
   [pscustomobject]@{ ok = $true; installed_both = $true; update_rollback_exercised = $true; rollback_failure_backup_retained = $true; update_preserved_config = $true; duplicate_rejected = $true; marker_mismatch_rejected = $true; uninstalled_both = $true } | ConvertTo-Json -Compress

@@ -14,9 +14,9 @@ import psutil
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from hermes_selection_translate.settings import Settings
+from double_ctrl_translator.settings import Settings
 
-APP = Path(os.environ['LOCALAPPDATA']) / 'Programs/HermesTool/HermesTool.exe'
+APP = Path(os.environ['LOCALAPPDATA']) / 'Programs/DoubleCtrlTranslator/DoubleCtrlTranslator.exe'
 
 
 def processes(name):
@@ -29,7 +29,7 @@ def hermes_main():
 
 
 def app_main():
-    return next((p for p in processes('HermesTool.exe') if p.info['exe'] and Path(p.info['exe']) == APP
+    return next((p for p in processes('DoubleCtrlTranslator.exe') if p.info['exe'] and Path(p.info['exe']) == APP
                  and not any(arg in {'--worker', '--model-guard'} for arg in p.info['cmdline'] or [])), None)
 
 

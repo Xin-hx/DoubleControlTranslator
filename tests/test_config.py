@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from hermes_selection_translate.config import Config
+from double_ctrl_translator.config import Config
 
 
 class ConfigTests(unittest.TestCase):

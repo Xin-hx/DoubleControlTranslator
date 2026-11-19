@@ -4,9 +4,9 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from hermes_selection_translate.selection import SelectionError, WindowIdentity
-from hermes_selection_translate.worker import Worker
-from hermes_selection_translate.model import TranslationError, warmup
+from double_ctrl_translator.selection import SelectionError, WindowIdentity
+from double_ctrl_translator.worker import Worker
+from double_ctrl_translator.model import TranslationError, warmup
 
 
 class _Root:
@@ -46,12 +46,22 @@ def _worker():
 
 
 class WorkerProductionPathTests(unittest.TestCase):
+    def test_dictionary_selection_routes_to_dictionary_prompt(self):
+        for selected, expected in (("take off", True), ("Take off now.", False)):
+            worker = _worker()
+            with self.subTest(selected=selected), patch(
+                "double_ctrl_translator.worker.stream_translate", return_value="结果"
+            ) as model:
+                worker.translate(1, 2, None, selected)
+                self.assertTrue(worker.card.done.wait(1), worker.card.updates)
+                self.assertEqual(model.call_args.kwargs["dictionary"], expected)
+
     def test_int_target_reaches_terminal_success(self):
         worker = _worker()
         identity = WindowIdentity(7, 8, 9.0)
-        with patch("hermes_selection_translate.worker.window_identity", return_value=identity), \
-             patch("hermes_selection_translate.worker.get_selected_text", return_value="public sample") as selected, \
-             patch("hermes_selection_translate.worker.stream_translate", return_value="公开译文"):
+        with patch("double_ctrl_translator.worker.window_identity", return_value=identity), \
+             patch("double_ctrl_translator.worker.get_selected_text", return_value="public sample") as selected, \
+             patch("double_ctrl_translator.worker.stream_translate", return_value="公开译文"):
             worker.translate(1, 2, 7)
             self.assertTrue(worker.card.done.wait(1), worker.card.updates)
         selected.assert_called_once()
@@ -61,8 +71,8 @@ class WorkerProductionPathTests(unittest.TestCase):
     def test_identity_target_reaches_terminal_success(self):
         worker = _worker()
         identity = WindowIdentity(7, 8, 9.0)
-        with patch("hermes_selection_translate.worker.get_selected_text", return_value="public sample") as selected, \
-             patch("hermes_selection_translate.worker.stream_translate", return_value="公开译文"):
+        with patch("double_ctrl_translator.worker.get_selected_text", return_value="public sample") as selected, \
+             patch("double_ctrl_translator.worker.stream_translate", return_value="公开译文"):
             worker.translate(1, 2, identity)
             self.assertTrue(worker.card.done.wait(1), worker.card.updates)
         self.assertIs(selected.call_args.args[1], identity)
@@ -71,7 +81,7 @@ class WorkerProductionPathTests(unittest.TestCase):
         for error, expected in [(SelectionError("UIA failed"), "UIA failed"),
                                 (UnboundLocalError("private selected text"), "处理失败（UnboundLocalError）")]:
             worker = _worker()
-            with patch("hermes_selection_translate.worker.get_selected_text", side_effect=error):
+            with patch("double_ctrl_translator.worker.get_selected_text", side_effect=error):
                 worker.translate(1, 2, WindowIdentity(7, 8, 9.0))
                 self.assertTrue(worker.card.done.wait(1), worker.card.updates)
             self.assertEqual(worker.card.updates[-1], (expected, "错误"))
@@ -81,10 +91,10 @@ class WorkerProductionPathTests(unittest.TestCase):
     def test_cancel_prevents_old_result_overwriting_card(self):
         worker = _worker()
         release = threading.Event()
-        def translate(*_args):
+        def translate(*_args, **_kwargs):
             release.wait(1)
             return "late"
-        with patch("hermes_selection_translate.worker.stream_translate", side_effect=translate):
+        with patch("double_ctrl_translator.worker.stream_translate", side_effect=translate):
             worker.translate(1, 2, None, "public sample")
             worker._cancel()
             release.set()
@@ -102,7 +112,7 @@ class WarmupTests(unittest.TestCase):
             on_delta("你好")
             return "你好"
         endpoint = {"base_url": "http://127.0.0.1:1/v1"}
-        with patch("hermes_selection_translate.model.stream_translate", side_effect=transport):
+        with patch("double_ctrl_translator.model.stream_translate", side_effect=transport):
             timing = warmup(endpoint, "Qwen3.5-4B-Q4_K_M", cancel, 4)
         self.assertEqual(seen["text"], "Hello.")
         self.assertIs(seen["cancel"], cancel)
@@ -114,7 +124,7 @@ class WarmupTests(unittest.TestCase):
             cancel = threading.Event()
             if cancel_first:
                 cancel.set()
-            with patch("hermes_selection_translate.model.stream_translate",
+            with patch("double_ctrl_translator.model.stream_translate",
                        side_effect=TranslationError("翻译已取消" if cancel_first else "timeout")):
                 with self.assertRaises(TranslationError):
                     warmup({"base_url": "http://127.0.0.1:1/v1"}, "Qwen3.5-4B-Q4_K_M", cancel, 1)

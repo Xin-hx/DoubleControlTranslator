@@ -2,9 +2,9 @@
 import queue, sys, tkinter as tk
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from hermes_selection_translate.hook import KeyboardHook
+from double_ctrl_translator.hook import KeyboardHook
 
-root=tk.Tk(); root.title("HermesTool 原生全局键 E2E")
+root=tk.Tk(); root.title("DoubleCtrlTranslator 原生全局键 E2E")
 text=tk.Text(root,width=55,height=8); text.pack(padx=20,pady=12)
 text.insert("1.0","Select this English sentence, then press and release Ctrl twice quickly.")
 text.tag_add("sel","1.0","1.end"); text.focus_force()

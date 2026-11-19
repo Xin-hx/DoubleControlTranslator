@@ -15,8 +15,8 @@ def stop_legacy_processes(home: Path):
     import psutil
     from .process_tree import owned_tree, stop_owned
     root = (home / 'plugins/selection-translate').resolve()
-    modules = {'hermes_selection_translate.control_surface', 'hermes_selection_translate.worker',
-               'hermes_selection_translate.model_guard'}
+    modules = {'double_ctrl_translator.control_surface', 'double_ctrl_translator.worker',
+               'double_ctrl_translator.model_guard'}
     for process in psutil.process_iter(['name', 'cmdline', 'create_time']):
         try:
             args = process.info['cmdline'] or []
@@ -52,7 +52,7 @@ def configure(home: Path, executable: Path, uninstall=False):
             plugins["enabled"].append("selection-translate")
         backup = directory / ("hermes-config-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f") + ".yaml.bak")
         backup.write_text(original, "utf-8")
-        temp = config_path.with_suffix(".hermestool.tmp")
+        temp = config_path.with_suffix(".doublectrltranslator.tmp")
         temp.write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False), "utf-8")
         temp.replace(config_path)
     if uninstall:

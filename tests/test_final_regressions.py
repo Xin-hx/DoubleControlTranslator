@@ -9,10 +9,10 @@ import psutil
 import unittest
 from unittest.mock import patch
 
-from hermes_selection_translate.lifecycle import DesktopIdentity
-from hermes_selection_translate.local_model import LocalModelError, OwnedModel
-from hermes_selection_translate.manager import WorkerManager
-from hermes_selection_translate.process_tree import owned_tree, stop_owned
+from double_ctrl_translator.lifecycle import DesktopIdentity
+from double_ctrl_translator.local_model import LocalModelError, OwnedModel
+from double_ctrl_translator.manager import WorkerManager
+from double_ctrl_translator.process_tree import owned_tree, stop_owned
 
 
 class _Pipe:

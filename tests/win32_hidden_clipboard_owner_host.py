@@ -8,7 +8,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from hermes_selection_translate.selection import _clipboard_window_matches, window_identity
+from double_ctrl_translator.selection import _clipboard_window_matches, window_identity
 
 user32 = ctypes.windll.user32
 WS_OVERLAPPEDWINDOW, WS_VISIBLE = 0x00CF0000, 0x10000000

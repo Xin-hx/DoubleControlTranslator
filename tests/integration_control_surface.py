@@ -20,7 +20,7 @@ import win32ui
 ROOT = Path(__file__).resolve().parents[1]
 SCREENSHOT = ROOT / "runtime" / "control-surface.bmp"
 process = subprocess.Popen(
-    [sys.executable, "-m", "hermes_selection_translate.control_surface", "--test-mode"],
+    [sys.executable, "-m", "double_ctrl_translator.control_surface", "--test-mode"],
     cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), shell=False,
 )

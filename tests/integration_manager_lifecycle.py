@@ -9,7 +9,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from hermes_selection_translate.manager import WorkerManager
+from double_ctrl_translator.manager import WorkerManager
 
 manager = WorkerManager(ROOT)
 token = manager.attach_session()

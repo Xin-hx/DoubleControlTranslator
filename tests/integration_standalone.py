@@ -18,9 +18,9 @@ import win32clipboard
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from hermes_selection_translate.manager import WorkerManager
+from double_ctrl_translator.manager import WorkerManager
 
-EXE = ROOT / 'dist/HermesTool/HermesTool.exe'
+EXE = ROOT / 'dist/DoubleCtrlTranslator/DoubleCtrlTranslator.exe'
 
 
 def command(mode, *args):
@@ -43,7 +43,7 @@ def main():
     pids = []
     result = {}
     try:
-        with patch('hermes_selection_translate.manager.child_command', side_effect=command), patch('hermes_selection_translate.local_model.child_command', side_effect=command), patch('hermes_selection_translate.manager.resolve_healthy_endpoint', side_effect=RuntimeError('force independent path')):
+        with patch('double_ctrl_translator.manager.child_command', side_effect=command), patch('double_ctrl_translator.local_model.child_command', side_effect=command), patch('double_ctrl_translator.manager.resolve_healthy_endpoint', side_effect=RuntimeError('force independent path')):
             started = time.monotonic()
             state = manager.enable_and_load()
             assert state['state'] == 'running', state

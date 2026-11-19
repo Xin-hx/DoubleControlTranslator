@@ -67,7 +67,7 @@ def environment():
 class SettingsDialog(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
-        self.setWindowTitle("设置 · HermesTool")
+        self.setWindowTitle("设置 · DoubleCtrlTranslator")
         self.resize(600, 280)
         self.settings = Settings.load()
         layout = QVBoxLayout(self)
@@ -155,7 +155,7 @@ class MainWindow(QMainWindow):
         self.polling = False
         self.quitting = False
         self.elevation_mismatch_seen = False
-        self.setWindowTitle("HermesTool · 划词翻译")
+        self.setWindowTitle("DoubleCtrlTranslator · 划词翻译")
         self.resize(560, 460)
         self.setMinimumSize(520, 420)
         central = QWidget()
@@ -165,7 +165,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(14)
         top = QHBoxLayout()
         title_col = QVBoxLayout()
-        eyebrow = QLabel("HERMESTOOL  /  LOCAL TRANSLATION")
+        eyebrow = QLabel("DOUBLECTRLTRANSLATOR  /  LOCAL TRANSLATION")
         eyebrow.setObjectName("eyebrow")
         title_col.addWidget(eyebrow)
         title = QLabel("划词，即译")
@@ -358,7 +358,7 @@ class MainWindow(QMainWindow):
         self.tray_toggle.setText(self.primary.text())
         self.tray_toggle.setEnabled(self.primary.isEnabled())
         self.tray_release.setEnabled(self.release.isEnabled())
-        self.tray.setToolTip("HermesTool · " + labels.get(phase, phase))
+        self.tray.setToolTip("DoubleCtrlTranslator · " + labels.get(phase, phase))
         e = self.env
         self.elevation_mismatch_seen |= bool(e.get('elevation_mismatch'))
         self.permission.setVisible(self.elevation_mismatch_seen and e.get('elevated') is not True)
@@ -399,7 +399,7 @@ class MainWindow(QMainWindow):
 def main():
     wait_for_previous_instance()
     app = QApplication(sys.argv)
-    app.setApplicationName("HermesTool")
+    app.setApplicationName("DoubleCtrlTranslator")
     app.setQuitOnLastWindowClosed(False)
     apply_style(app)
     directory = data_dir()
@@ -414,7 +414,7 @@ def main():
         return 1
     if "--from-hermes" in sys.argv and not settings.launch_with_hermes:
         return 0
-    name = "HermesTool-" + hashlib.sha256(str(directory.resolve()).lower().encode()).hexdigest()[:16]
+    name = "DoubleCtrlTranslator-" + hashlib.sha256(str(directory.resolve()).lower().encode()).hexdigest()[:16]
     lock = QLockFile(str(directory / "instance.lock"))
     lock.setStaleLockTime(0)
     if not lock.tryLock(100):
@@ -425,7 +425,7 @@ def main():
             socket.waitForBytesWritten(1000)
             socket.disconnectFromServer()
             return 0
-        QMessageBox.warning(None, "HermesTool", "已有实例正在启动或退出，请稍后重试。")
+        QMessageBox.warning(None, "DoubleCtrlTranslator", "已有实例正在启动或退出，请稍后重试。")
         return 1
     if "--quit" in sys.argv:
         lock.unlock()

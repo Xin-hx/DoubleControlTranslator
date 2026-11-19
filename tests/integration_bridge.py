@@ -8,7 +8,7 @@ import time
 import psutil
 
 ROOT = Path(__file__).resolve().parents[1]
-EXE = ROOT / 'dist/HermesTool/HermesTool.exe'
+EXE = ROOT / 'dist/DoubleCtrlTranslator/DoubleCtrlTranslator.exe'
 spec = importlib.util.spec_from_file_location('test_bridge_launcher', ROOT / 'plugin/dashboard/launcher.py')
 launcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(launcher)

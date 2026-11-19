@@ -14,7 +14,7 @@ import win32con
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from hermes_selection_translate.selection import (ClipboardSnapshot, SelectionError,
+from double_ctrl_translator.selection import (ClipboardSnapshot, SelectionError,
     get_selected_text, uia_selected_text, window_identity)
 
 
@@ -62,7 +62,7 @@ try:
         "expected": info["hwnd"], "actual": ctypes.windll.user32.GetForegroundWindow()}
     uia = uia_selected_text(1.5)
     assert uia == public, repr(uia)
-    custom = win32clipboard.RegisterClipboardFormat("HermesTool.Test.SafeBytes")
+    custom = win32clipboard.RegisterClipboardFormat("DoubleCtrlTranslator.Test.SafeBytes")
     win32clipboard.OpenClipboard()
     try:
         win32clipboard.EmptyClipboard()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QTextEdit, QVBoxLayout
 
 
@@ -19,7 +20,7 @@ class TranslationCard:
         win.setObjectName("surface")
         win.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         win.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus)
-        win.setWindowTitle("HermesTool · 译文")
+        win.setWindowTitle("DoubleCtrlTranslator · 译文")
         layout = QVBoxLayout(win)
         layout.setContentsMargins(18, 14, 18, 14)
         header = QHBoxLayout()
@@ -36,14 +37,25 @@ class TranslationCard:
         self.output = QTextEdit()
         self.output.setReadOnly(True)
         self.output.setPlainText(state)
-        self.output.setStyleSheet("border: none; font-size: 14px;")
+        self.output.document().setDocumentMargin(4)
+        self.output.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        palette = QApplication.palette()
+        thumb = palette.color(QPalette.ColorRole.Mid).name()
+        self.output.setStyleSheet(f"""
+            QTextEdit {{ border: none; background: transparent; font-size: 14px; }}
+            QScrollBar:vertical {{ width: 8px; background: transparent; border: none; margin: 0; }}
+            QScrollBar::handle:vertical {{ background: {thumb}; border-radius: 4px; min-height: 28px; }}
+            QScrollBar::handle:vertical:hover {{ background: #7181ed; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; border: none; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+        """)
         layout.addWidget(self.output)
         footer = QHBoxLayout()
         hint = QLabel("Esc 关闭")
         hint.setObjectName("muted")
         footer.addWidget(hint)
         footer.addStretch()
-        self.copy_button = QPushButton("复制译文")
+        self.copy_button = QPushButton("复制内容")
         self.copy_button.setEnabled(False)
         self.copy_button.clicked.connect(self.copy)
         footer.addWidget(self.copy_button)
@@ -61,12 +73,15 @@ class TranslationCard:
         if not self.win:
             return
         self.text = text if state == "success" else ""
-        self.output.setPlainText(text if state in {"success", "progress"} else f"{state}\n{text}")
+        if state == "success":
+            self.output.setMarkdown(text)
+        else:
+            self.output.setPlainText(text if state == "progress" else f"{state}\n{text}")
         self.copy_button.setEnabled(bool(self.text))
 
     def copy(self) -> None:
         if self.text:
-            QApplication.clipboard().setText(self.text)
+            QApplication.clipboard().setText(self.output.toPlainText())
 
     def close(self) -> None:
         self.on_cancel()

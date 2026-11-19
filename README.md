@@ -1,4 +1,4 @@
-# HermesTool 独立划词翻译
+# DoubleCtrlTranslator 独立划词翻译
 
 Windows 桌面程序，使用 PySide6 界面与系统托盘，通过本机 llama.cpp 运行 Qwen3.5-4B-Q4_K_M。Hermes 是可选的资源来源与启动入口；程序无需 Hermes 后端或其 Python 环境即可工作。
 
@@ -9,7 +9,7 @@ Windows 桌面程序，使用 PySide6 界面与系统托盘，通过本机 llama
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m hermes_selection_translate
+.\.venv\Scripts\python.exe -m double_ctrl_translator
 ```
 
 构建、安装：
@@ -19,9 +19,11 @@ python -m venv .venv
 .\scripts\install.ps1
 ```
 
-构建产物是 `dist\HermesTool\HermesTool.exe`，分发时必须保留整个 `HermesTool` 目录。安装到 `%LOCALAPPDATA%\Programs\HermesTool`，创建桌面与开始菜单快捷方式。安装包不包含 GGUF、llama.cpp 或 CUDA 运行库；这些资源从 Hermes 自动发现，或在设置中手动选择。独立 exe 不要求目标机器安装 Python。
+构建产物是 `dist\DoubleCtrlTranslator\DoubleCtrlTranslator.exe`，分发时必须保留整个 `DoubleCtrlTranslator` 目录。安装到 `%LOCALAPPDATA%\Programs\DoubleCtrlTranslator`，创建桌面与开始菜单快捷方式。安装包不包含 GGUF、llama.cpp 或 CUDA 运行库；这些资源从 Hermes 自动发现，或在设置中手动选择。独立 exe 不要求目标机器安装 Python。
 
 安装器只替换带本项目标记的旧插件，并备份迁移旧翻译配置；保留其他插件和模型文件。Hermes 配置会保留原始备份及所有无关配置值，YAML 注释与格式可能重新排版。安装后重启 Hermes，启动桥接生效。没有 Hermes 时仍可安装和独立运行。
+
+首次运行新版时，如新设置目录尚无 `settings.json`，会复制 `%LOCALAPPDATA%\HermesTool\settings.json` 到新目录。旧版独立程序的安装目录不会被新安装器删除；升级前请从托盘退出旧版，并用旧版卸载脚本移除旧程序。
 
 更新前从托盘退出程序，再执行 `scripts\update.ps1`。卸载使用 `scripts\uninstall.ps1`，默认保留用户设置、日志、模型及 llama.cpp。自定义安装位置可使用脚本参数 `-InstallDir`、`-HermesHome`，卸载时传入相同路径。
 
@@ -29,6 +31,7 @@ python -m venv .venv
 
 - 首次打开时点击“开启翻译”，以后按上次监听开关恢复。准备模型需要加载与预热，请等“翻译已就绪”后划词。
 - 在其他应用选中文字，350 毫秒内连续轻按并释放两次 Ctrl。浮卡不抢前台焦点；Esc 或关闭按钮取消当前翻译，译文完成后可以复制。
+- 选中单个英文单词或不超过五个词的英文词组时，浮卡显示词典式内容，包括可确认的音标、词性、词义、常见搭配和双语例句；其他文本仍显示译文。词典内容由本机模型生成，重要用法请核对。
 - 关闭主窗口收起到托盘；双击托盘恢复。托盘菜单可开启／暂停、释放项目模型及退出。系统托盘不可用时保持窗口可见。
 - 暂停会停止监听并释放程序启动的模型。退出也会清理自有进程，但保留上次监听偏好。共享模型不由本程序卸载。
 - 默认随 Hermes 启动并显示窗口；Hermes 退出后程序继续运行。“设置”中可以关闭联动，或更改 Hermes、GGUF 与 llama-server 路径。路径更改在下次开启时生效。
@@ -36,9 +39,9 @@ python -m venv .venv
 - 共享服务断开时取消当前请求并准备独立模型；就绪后需要重新划词，不自动重发原选区。
 - 若 VS Code 等目标应用以管理员身份运行，普通权限的翻译程序可能无法接收按键或读取选区。程序会提示权限不匹配，可在主窗口提示或“设置”中选择“以管理员身份重启”，并由你确认 Windows 提示；也可将目标应用改为普通权限运行。取消提升不会关闭当前程序，程序不修改系统安全设置或永久提权。
 
-设置与日志位于 `%LOCALAPPDATA%\HermesTool`。默认最大选区 2000 字符、连接超时 3 秒、读取超时 20 秒、总时限 90 秒；高级参数保存在 `settings.json` 的 `translation` 中。API 密钥不在界面或诊断结果中显示。模型请求只允许本机 IP，禁用代理和重定向。
+设置与日志位于 `%LOCALAPPDATA%\DoubleCtrlTranslator`。默认最大选区 2000 字符、连接超时 3 秒、读取超时 20 秒、总时限 90 秒；高级参数保存在 `settings.json` 的 `translation` 中。API 密钥不在界面或诊断结果中显示。模型请求只允许本机 IP，禁用代理和重定向。
 
-命令行 `HermesTool.exe --quit` 可请求当前用户的已有实例正常退出；再次运行 exe 会恢复已有窗口。`--worker`、`--model-guard` 是内部管道入口，不应直接运行。
+命令行 `DoubleCtrlTranslator.exe --quit` 可请求当前用户的已有实例正常退出；再次运行 exe 会恢复已有窗口。`--worker`、`--model-guard` 是内部管道入口，不应直接运行。
 
 ## 架构
 

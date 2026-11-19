@@ -17,7 +17,7 @@ import psutil
 from .card import TranslationCard
 from .config import Config
 from .hook import KeyboardHook
-from .model import stream_translate, TranslationError
+from .model import stream_translate, TranslationError, is_dictionary_query
 from .selection import get_selected_text, SelectionError, WindowIdentity, window_identity
 
 
@@ -170,6 +170,7 @@ class Worker:
                     text = get_selected_text(self.config.max_chars, selection_target, request_cancel)
                 if request_cancel.is_set():
                     raise TranslationError("翻译已取消")
+                dictionary = is_dictionary_query(text)
                 elapsed = time.monotonic() - started
                 remaining = self.config.total_timeout_s - elapsed
                 if remaining <= 0:
@@ -187,12 +188,12 @@ class Worker:
                         self.last_first_token_ms = int((first_token_at[0] - started) * 1000)
                     elapsed_now = time.monotonic() - started
                     post(lambda value=full, e=elapsed_now:
-                         update(f"生成译文 · {e:.1f} 秒\n{value}", "progress"))
+                         update(f"生成{'词典内容' if dictionary else '译文'} · {e:.1f} 秒\n{value}", "progress"))
 
                 result = stream_translate(
                     text, endpoint, request_model(endpoint, self.config.model), delta, request_cancel,
                     self.config.read_timeout_s, self.config.connect_timeout_s,
-                    remaining,
+                    remaining, dictionary=dictionary,
                 )
                 self.last_request_ms = int((time.monotonic() - started) * 1000)
                 post(lambda value=result: update(value))

@@ -7,11 +7,11 @@ import threading
 import unittest
 from unittest.mock import Mock, patch
 
-from hermes_selection_translate.config import Config
-from hermes_selection_translate.endpoint import resolve_endpoint, resolve_healthy_endpoint
-from hermes_selection_translate.local_model import OwnedModel, LocalModelError
-from hermes_selection_translate.manager import WorkerManager
-from hermes_selection_translate.settings import Settings
+from double_ctrl_translator.config import Config
+from double_ctrl_translator.endpoint import resolve_endpoint, resolve_healthy_endpoint
+from double_ctrl_translator.local_model import OwnedModel, LocalModelError
+from double_ctrl_translator.manager import WorkerManager
+from double_ctrl_translator.settings import Settings
 
 
 class StandaloneTests(unittest.TestCase):
@@ -19,7 +19,7 @@ class StandaloneTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.home = self.root / 'hermes'
-        self.env = patch.dict(os.environ, {'HERMESTOOL_HOME': str(self.root / 'app'), 'HERMES_HOME': str(self.home)})
+        self.env = patch.dict(os.environ, {'DOUBLECTRLTRANSLATOR_HOME': str(self.root / 'app'), 'HERMES_HOME': str(self.home)})
         self.env.start()
 
     def tearDown(self):
@@ -68,7 +68,7 @@ class StandaloneTests(unittest.TestCase):
         response.status = 200
         response.__enter__ = Mock(return_value=response)
         response.__exit__ = Mock(return_value=False)
-        with patch('hermes_selection_translate.endpoint.resolve_endpoint', return_value=endpoint), patch('hermes_selection_translate.endpoint._open_models', return_value=response):
+        with patch('double_ctrl_translator.endpoint.resolve_endpoint', return_value=endpoint), patch('double_ctrl_translator.endpoint._open_models', return_value=response):
             for name, status in [('Qwen3.5-4B-Q4_K_M', 'unloaded'), ('other', 'loaded')]:
                 response.read.return_value = json.dumps({'data': [{'id': name, 'status': status}]}).encode()
                 with self.assertRaises(RuntimeError):
@@ -100,7 +100,7 @@ class StandaloneTests(unittest.TestCase):
         spawn.assert_not_called()
 
     def test_internal_stdio_forces_utf8_even_when_streams_already_exist(self):
-        from hermes_selection_translate.launch import pipe_stdio
+        from double_ctrl_translator.launch import pipe_stdio
         stdin, stdout = Mock(), Mock()
         with patch('sys.stdin', stdin), patch('sys.stdout', stdout):
             pipe_stdio()
@@ -123,7 +123,7 @@ class StandaloneTests(unittest.TestCase):
         manager.model = Mock()
         manager.model.running.return_value = False
         manager.model.process = None
-        with patch.object(manager, '_worker_running', return_value=True), patch.object(manager, '_send') as send, patch('hermes_selection_translate.manager.resolve_healthy_endpoint', side_effect=RuntimeError()), patch('hermes_selection_translate.manager.threading.Thread') as task:
+        with patch.object(manager, '_worker_running', return_value=True), patch.object(manager, '_send') as send, patch('double_ctrl_translator.manager.resolve_healthy_endpoint', side_effect=RuntimeError()), patch('double_ctrl_translator.manager.threading.Thread') as task:
             result = manager.status()
         self.assertIsNone(manager.endpoint)
         self.assertIn('重新划词', result['notice'])
@@ -132,28 +132,28 @@ class StandaloneTests(unittest.TestCase):
         self.assertFalse(any(call.args[0].get('op') == 'test' for call in send.call_args_list))
 
     def test_install_metadata_preserves_unrelated_values_and_uninstall_keeps_settings(self):
-        from hermes_selection_translate.deployment import configure
+        from double_ctrl_translator.deployment import configure
         import yaml
         self.home.mkdir()
         config = self.home / 'config.yaml'
         config.write_text('unrelated: {a: 42}\nplugins:\n  enabled: [other]\n  disabled: [selection-translate]\n', 'utf-8')
-        configure(self.home, self.root / 'HermesTool.exe')
+        configure(self.home, self.root / 'DoubleCtrlTranslator.exe')
         loaded = yaml.safe_load(config.read_text('utf-8'))
         self.assertEqual(loaded['unrelated'], {'a': 42})
         self.assertEqual(loaded['plugins']['enabled'], ['other', 'selection-translate'])
-        configure(self.home, self.root / 'HermesTool.exe', uninstall=True)
+        configure(self.home, self.root / 'DoubleCtrlTranslator.exe', uninstall=True)
         self.assertTrue((self.root / 'app/settings.json').exists())
         self.assertFalse((self.root / 'app/bridge.json').exists())
 
     def test_legacy_migration_stops_only_processes_in_owned_plugin_directory(self):
-        from hermes_selection_translate.deployment import stop_legacy_processes
+        from double_ctrl_translator.deployment import stop_legacy_processes
         owned, unrelated = Mock(), Mock()
         for pid, process in enumerate((owned, unrelated), 100):
             process.pid = pid
-            process.info = {'cmdline': ['python', '-m', 'hermes_selection_translate.control_surface'], 'create_time': 1.0}
+            process.info = {'cmdline': ['python', '-m', 'double_ctrl_translator.control_surface'], 'create_time': 1.0}
         owned.cwd.return_value = str(self.home / 'plugins/selection-translate')
         unrelated.cwd.return_value = str(self.root / 'another-project')
-        with patch('psutil.process_iter', return_value=[owned, unrelated]), patch('hermes_selection_translate.process_tree.owned_tree', return_value=[(100, 1.0)]) as tree, patch('hermes_selection_translate.process_tree.stop_owned') as stop:
+        with patch('psutil.process_iter', return_value=[owned, unrelated]), patch('double_ctrl_translator.process_tree.owned_tree', return_value=[(100, 1.0)]) as tree, patch('double_ctrl_translator.process_tree.stop_owned') as stop:
             stop_legacy_processes(self.home)
         tree.assert_called_once_with(100, 1.0)
         stop.assert_called_once_with([(100, 1.0)])

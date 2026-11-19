@@ -3,7 +3,7 @@ import sys
 import unittest
 from unittest.mock import patch
 
-from hermes_selection_translate.lifecycle import LifecycleError, detect_local_desktop
+from double_ctrl_translator.lifecycle import LifecycleError, detect_local_desktop
 
 
 class LifecycleTests(unittest.TestCase):

@@ -11,7 +11,7 @@ from .config import Config
 
 
 def data_dir() -> Path:
-    return Path(os.environ.get("HERMESTOOL_HOME", Path(os.environ["LOCALAPPDATA"]) / "HermesTool"))
+    return Path(os.environ.get("DOUBLECTRLTRANSLATOR_HOME", Path(os.environ["LOCALAPPDATA"]) / "DoubleCtrlTranslator"))
 
 
 def default_hermes_home() -> Path:
@@ -29,9 +29,13 @@ class Settings:
 
     @classmethod
     def load(cls, directory: Path | None = None) -> "Settings":
+        migrate = directory is None and "DOUBLECTRLTRANSLATOR_HOME" not in os.environ
         directory = directory or data_dir()
         directory.mkdir(parents=True, exist_ok=True)
         path = directory / "settings.json"
+        previous = Path(os.environ["LOCALAPPDATA"]) / "HermesTool" / "settings.json"
+        if not path.exists() and migrate and previous.is_file():
+            shutil.copy2(previous, path)
         if path.exists():
             raw = json.loads(path.read_text("utf-8"))
             result = cls(**raw)

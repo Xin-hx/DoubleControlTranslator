@@ -7,9 +7,9 @@ import shutil
 import subprocess
 import tempfile
 
-from hermes_selection_translate.endpoint import TARGET_SHARED_MODEL, resolve_healthy_endpoint
-from hermes_selection_translate.manager import WorkerManager
-from hermes_selection_translate.worker import request_model
+from double_ctrl_translator.endpoint import TARGET_SHARED_MODEL, resolve_healthy_endpoint
+from double_ctrl_translator.manager import WorkerManager
+from double_ctrl_translator.worker import request_model
 
 
 class _Response(io.BytesIO):
@@ -28,23 +28,23 @@ class SharedEndpointTests(unittest.TestCase):
 
     def test_router_alive_but_target_unloaded_is_not_ready(self):
         endpoint = {"base_url": "http://127.0.0.1:18434/v1", "api_key": "memory-only"}
-        with patch("hermes_selection_translate.endpoint.resolve_endpoint", return_value=endpoint), \
-             patch("hermes_selection_translate.endpoint._open_models", return_value=self._models("unloaded")):
+        with patch("double_ctrl_translator.endpoint.resolve_endpoint", return_value=endpoint), \
+             patch("double_ctrl_translator.endpoint._open_models", return_value=self._models("unloaded")):
             with self.assertRaisesRegex(RuntimeError, "未加载"):
                 resolve_healthy_endpoint()
 
     def test_loaded_shared_alias_is_forwarded_without_gguf(self):
         endpoint = {"base_url": "http://127.0.0.1:18434/v1", "api_key": "memory-only"}
-        with patch("hermes_selection_translate.endpoint.resolve_endpoint", return_value=endpoint), \
-             patch("hermes_selection_translate.endpoint._open_models", return_value=self._models("loaded")):
+        with patch("double_ctrl_translator.endpoint.resolve_endpoint", return_value=endpoint), \
+             patch("double_ctrl_translator.endpoint._open_models", return_value=self._models("loaded")):
             result = resolve_healthy_endpoint()
         self.assertEqual(result["model"], TARGET_SHARED_MODEL)
         self.assertNotIn(".gguf", result["model"])
 
     def test_loaded_different_model_is_never_selected(self):
         endpoint = {"base_url": "http://127.0.0.1:18434/v1"}
-        with patch("hermes_selection_translate.endpoint.resolve_endpoint", return_value=endpoint), \
-             patch("hermes_selection_translate.endpoint._open_models", return_value=self._models("loaded", "Qwen3.5-27B")):
+        with patch("double_ctrl_translator.endpoint.resolve_endpoint", return_value=endpoint), \
+             patch("double_ctrl_translator.endpoint._open_models", return_value=self._models("loaded", "Qwen3.5-27B")):
             with self.assertRaisesRegex(RuntimeError, "4B"):
                 resolve_healthy_endpoint()
 
@@ -71,7 +71,7 @@ class EnableAndLoadTests(unittest.TestCase):
         manager.worker_endpoint = {"base_url": "http://127.0.0.1:1/v1", "model": TARGET_SHARED_MODEL}
         with patch.object(manager, "enable", return_value=ready), \
              patch.object(manager, "start_model") as start, \
-             patch("hermes_selection_translate.manager.warmup",
+             patch("double_ctrl_translator.manager.warmup",
                    return_value={"warmup_ms": 12, "warmup_first_token_ms": 7}) as run_warmup, \
              patch.object(manager, "status", return_value=ready):
             self.assertIs(manager.enable_and_load(), ready)

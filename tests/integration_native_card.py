@@ -10,7 +10,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from hermes_selection_translate.card import MONITORINFO, TranslationCard
+from double_ctrl_translator.card import MONITORINFO, TranslationCard
 
 host = subprocess.Popen([sys.executable, str(ROOT / "tests" / "win32_edit_host.py")],
                         cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)

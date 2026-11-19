@@ -16,10 +16,10 @@ import win32clipboard
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tests"))
-from hermes_selection_translate.hook import E2E_INPUT_MARKER, KeyboardHook
-from hermes_selection_translate.selection import INPUT, KEYBDINPUT
-from hermes_selection_translate.config import Config
-from hermes_selection_translate.worker import Worker
+from double_ctrl_translator.hook import E2E_INPUT_MARKER, KeyboardHook
+from double_ctrl_translator.selection import INPUT, KEYBDINPUT
+from double_ctrl_translator.config import Config
+from double_ctrl_translator.worker import Worker
 from model_harness import TemporaryLlama
 
 

@@ -1,23 +1,23 @@
 [CmdletBinding()]
 param(
   [string]$HermesHome = "$env:LOCALAPPDATA\hermes",
-  [string]$InstallDir = "$env:LOCALAPPDATA\Programs\HermesTool",
+  [string]$InstallDir = "$env:LOCALAPPDATA\Programs\DoubleCtrlTranslator",
   [switch]$NoLaunch
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'paths.ps1')
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$source = Join-Path $projectRoot 'dist\HermesTool'
+$source = Join-Path $projectRoot 'dist\DoubleCtrlTranslator'
 $installRoot = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
 $appParent = Split-Path -Parent $installRoot
 $hermesRoot = [IO.Path]::GetFullPath($HermesHome).TrimEnd('\')
 Assert-ChildPath $installRoot $appParent
 $markerName = '.hermes-selection-translate-install'
-$oldMarker = 'HermesTool/selection-translate/v1'
-$newMarker = 'HermesTool/selection-translate/v2'
-$appMarker = '.hermestool-install'
-if (-not (Test-Path -LiteralPath (Join-Path $source 'HermesTool.exe'))) { throw 'Run scripts/build.ps1 first' }
-if (Get-Process -Name HermesTool -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($installRoot + '\', [StringComparison]::OrdinalIgnoreCase) }) { throw 'Exit HermesTool from its tray menu before updating' }
+$oldMarkers = @('HermesTool/selection-translate/v1', 'HermesTool/selection-translate/v2')
+$newMarker = 'DoubleCtrlTranslator/selection-translate/v2'
+$appMarker = '.doublectrltranslator-install'
+if (-not (Test-Path -LiteralPath (Join-Path $source 'DoubleCtrlTranslator.exe'))) { throw 'Run scripts/build.ps1 first' }
+if (Get-Process -Name DoubleCtrlTranslator -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($installRoot + '\', [StringComparison]::OrdinalIgnoreCase) }) { throw 'Exit DoubleCtrlTranslator from its tray menu before updating' }
 if (Test-Path -LiteralPath $installRoot) {
   $marker = Join-Path $installRoot $appMarker
   if (-not (Test-Path -LiteralPath $marker) -or (Get-Content -Raw -LiteralPath $marker).Trim() -ne $newMarker) { throw 'Refusing to overwrite an unmarked application directory' }
@@ -29,7 +29,7 @@ if (Test-Path -LiteralPath $hermesRoot -PathType Container) {
     Assert-ChildPath $target $hermesRoot
     if (Test-Path -LiteralPath $target) {
       $marker = Join-Path $target $markerName
-      if (-not (Test-Path -LiteralPath $marker) -or (Get-Content -Raw -LiteralPath $marker).Trim() -notin @($oldMarker,$newMarker)) { throw "Refusing to replace unowned plugin: $target" }
+      if (-not (Test-Path -LiteralPath $marker) -or (Get-Content -Raw -LiteralPath $marker).Trim() -notin ($oldMarkers + $newMarker)) { throw "Refusing to replace unowned plugin: $target" }
     }
     $targets += $target
   }
@@ -43,7 +43,7 @@ Copy-Item -Path (Join-Path $source '*') -Destination $stage -Recurse -Force
 [IO.File]::WriteAllText((Join-Path $stage $appMarker), $newMarker, $utf8)
 $swapped = $false
 $pluginBackups = @()
-$dataRoot = if ($env:HERMESTOOL_HOME) { $env:HERMESTOOL_HOME } else { Join-Path $env:LOCALAPPDATA 'HermesTool' }
+$dataRoot = if ($env:DOUBLECTRLTRANSLATOR_HOME) { $env:DOUBLECTRLTRANSLATOR_HOME } else { Join-Path $env:LOCALAPPDATA 'DoubleCtrlTranslator' }
 $metadataBackups = @()
 foreach ($path in @((Join-Path $hermesRoot 'config.yaml'),(Join-Path $dataRoot 'settings.json'),(Join-Path $dataRoot 'bridge.json'))) {
   $metadataBackups += [pscustomobject]@{ Path=$path; Bytes=$(if (Test-Path -LiteralPath $path) { [IO.File]::ReadAllBytes($path) } else { $null }) }
@@ -52,9 +52,9 @@ try {
   if (Test-Path -LiteralPath $installRoot) { Move-ManagedDirectory $installRoot $backup $appParent }
   Move-ManagedDirectory $stage $installRoot $appParent
   $swapped = $true
-  $exe = Join-Path $installRoot 'HermesTool.exe'
+  $exe = Join-Path $installRoot 'DoubleCtrlTranslator.exe'
   $metadata = Start-Process -FilePath $exe -ArgumentList @('--install-metadata','--hermes-home',('"' + $hermesRoot + '"'),'--executable',('"' + $exe + '"')) -WindowStyle Hidden -Wait -PassThru
-  if ($metadata.ExitCode -ne 0) { throw "Metadata migration failed; see $env:LOCALAPPDATA\HermesTool\install-error.log" }
+  if ($metadata.ExitCode -ne 0) { throw "Metadata migration failed; see $env:LOCALAPPDATA\DoubleCtrlTranslator\install-error.log" }
   foreach ($target in $targets) {
     $saved = $target + '.backup-' + $stamp
     if (Test-Path -LiteralPath $target) { Move-ManagedDirectory $target $saved $hermesRoot }
@@ -86,7 +86,7 @@ foreach ($entry in $pluginBackups) { Remove-ManagedDirectory $entry.Saved $herme
 Remove-ManagedDirectory $backup $appParent
 $shell = New-Object -ComObject WScript.Shell
 foreach ($folder in @([Environment]::GetFolderPath('Desktop'),[Environment]::GetFolderPath('Programs'))) {
-  $shortcut = $shell.CreateShortcut((Join-Path $folder 'HermesTool.lnk'))
+  $shortcut = $shell.CreateShortcut((Join-Path $folder 'DoubleCtrlTranslator.lnk'))
   $shortcut.TargetPath = $exe
   $shortcut.WorkingDirectory = $installRoot
   $shortcut.Save()

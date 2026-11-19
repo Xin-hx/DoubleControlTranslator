@@ -4,7 +4,7 @@ import importlib.util
 from fastapi import APIRouter
 
 ROOT = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("hermestool_startup_bridge", ROOT / "launcher.py")
+spec = importlib.util.spec_from_file_location("doublectrltranslator_startup_bridge", ROOT / "launcher.py")
 bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
 
